@@ -1,0 +1,19 @@
+{
+  "channels": {
+    "1190369031140679680": {
+      "UC04yTyvAHu2GlkYEN78ZT1A": {
+        "video": "1190369251639443537",
+        "live": "1190369031589474447",
+        "upcoming": "1190369031589474447"
+      }
+    }
+  },
+  "templates": {
+    "video": "🎥 Nowy film od {nazwaKanalu}!\n📺 {tytul}\n🔗 {link}",
+    "live": "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}",
+    "upcoming": "⏰ {nazwaKanalu} zaplanował transmisję!\n📺 {tytul}\n🕒 Start: {startTime}\n🔗 {link}"
+  },
+  "lastChecked": {
+    "UC04yTyvAHu2GlkYEN78ZT1A": "p0E-7kfvGBQ"
+  }
+}

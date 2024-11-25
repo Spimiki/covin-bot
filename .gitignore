@@ -1,9 +1,3 @@
-# Environment variables
-.env
-
-# Config files
-config.json
-config.dev.json
 
 # Dependencies
 node_modules/
@@ -67,4 +61,4 @@ ecosystem.config.js
 # Optional: backup files
 *.bak
 *.backup
-*~.nib 
+*~.nib
