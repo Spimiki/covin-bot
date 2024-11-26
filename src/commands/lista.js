@@ -30,11 +30,6 @@ module.exports = {
                     const liveChannel = interaction.client.channels.cache.get(channelConfig.live);
                     channelInfo.push(`🔴 Transmisje: ${liveChannel ? `<#${channelConfig.live}>` : 'Kanał niedostępny'}`);
                 }
-                
-                if (channelConfig.upcoming) {
-                    const upcomingChannel = interaction.client.channels.cache.get(channelConfig.upcoming);
-                    channelInfo.push(`⏰ Zaplanowane: ${upcomingChannel ? `<#${channelConfig.upcoming}>` : 'Kanał niedostępny'}`);
-                }
 
                 embed.fields.push({
                     name: `YouTube ID: ${youtubeId}`,

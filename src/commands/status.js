@@ -32,8 +32,7 @@ module.exports = {
                             name: 'Kanały Discord',
                             value: [
                                 channels[channelId].video ? `📹 Filmy: <#${channels[channelId].video}>` : null,
-                                channels[channelId].live ? `🔴 Transmisje: <#${channels[channelId].live}>` : null,
-                                channels[channelId].upcoming ? `⏰ Zaplanowane: <#${channels[channelId].upcoming}>` : null
+                                channels[channelId].live ? `🔴 Transmisje: <#${channels[channelId].live}>` : null
                             ].filter(Boolean).join('\n') || 'Brak skonfigurowanych kanałów',
                             inline: false
                         },
@@ -57,7 +56,11 @@ module.exports = {
                 fields: [
                     {
                         name: 'API',
-                        value: `Aktywne klucze: ${stats.activeKeys}/${youtubeNotifier.apiKeys.length}\nZapytania: ${stats.apiCalls}`,
+                        value: [
+                            `Aktywne klucze: ${stats.activeKeys}/${youtubeNotifier.apiKeys.length}`,
+                            `Zapytania: ${stats.apiCalls}`,
+                            `Pozostały limit: ${10000 - youtubeNotifier.keyStatus.get(youtubeNotifier.apiKeys[youtubeNotifier.currentKeyIndex]).quotaUsed}/10000`
+                        ].join('\n'),
                         inline: true
                     },
                     {

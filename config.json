@@ -1,19 +1,26 @@
 {
   "channels": {
     "1190369031140679680": {
-      "UC04yTyvAHu2GlkYEN78ZT1A": {
-        "video": "1190369251639443537",
-        "live": "1190369031589474447",
-        "upcoming": "1190369031589474447"
+      "UC5rybJB2vq2bGRl2mt71ebQ": {
+        "video": "1190369031589474447",
+        "live": "1190369251639443537"
       }
     }
   },
+  "serverTemplates": {},
   "templates": {
     "video": "🎥 Nowy film od {nazwaKanalu}!\n📺 {tytul}\n🔗 {link}",
-    "live": "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}",
-    "upcoming": "⏰ {nazwaKanalu} zaplanował transmisję!\n📺 {tytul}\n🕒 Start: {startTime}\n🔗 {link}"
+    "live": "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}"
+  },
+  "checkIntervals": {
+    "1190369031140679680": 1
   },
   "lastChecked": {
-    "UC04yTyvAHu2GlkYEN78ZT1A": "p0E-7kfvGBQ"
+    "UC04yTyvAHu2GlkYEN78ZT1A": "p0E-7kfvGBQ",
+    "UC5rybJB2vq2bGRl2mt71ebQ": "ce6UXFw68bY"
+  },
+  "notifiedVideos": {
+    "GcxFAyojfww": 1732631040982,
+    "05k94dtcWu4": 1732631103828
   }
 }

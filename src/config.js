@@ -5,6 +5,10 @@ class Config {
     constructor(configPath = 'config.json') {
         this.configPath = path.join(__dirname, '..', configPath);
         this.config = this.loadConfig();
+        
+        if (!this.config.notifiedVideos) {
+            this.config.notifiedVideos = {};
+        }
     }
 
     loadConfig() {
@@ -32,6 +36,7 @@ class Config {
     saveConfig() {
         try {
             fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
+            console.log(`[${new Date().toLocaleTimeString()}] Zapisano zmiany w konfiguracji`);
         } catch (error) {
             console.error('Błąd podczas zapisywania konfiguracji:', error);
         }
@@ -40,11 +45,12 @@ class Config {
     getTemplate(guildId, type) {
         const defaultTemplates = {
             video: "🎥 Nowy film od {nazwaKanalu}!\n📺 {tytul}\n🔗 {link}",
-            live: "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}",
-            upcoming: "⏰ {nazwaKanalu} zaplanował transmisję!\n📺 {tytul}\n🕒 Start: {startTime}\n🔗 {link}"
+            live: "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}"
         };
 
-        return this.config.templates?.[type] || defaultTemplates[type];
+        return this.config.serverTemplates?.[guildId]?.[type] || 
+               this.config.templates?.[type] || 
+               defaultTemplates[type];
     }
 
     getChannels(guildId) {
@@ -52,11 +58,15 @@ class Config {
     }
 
     getAllYouTubeChannels() {
-        const channels = new Set();
-        Object.values(this.config.channels).forEach(guildChannels => {
-            Object.keys(guildChannels).forEach(channelId => channels.add(channelId));
+        const uniqueChannels = new Set();
+        
+        Object.values(this.config.channels || {}).forEach(guildChannels => {
+            Object.keys(guildChannels).forEach(youtubeId => {
+                uniqueChannels.add(youtubeId);
+            });
         });
-        return Array.from(channels);
+        
+        return Array.from(uniqueChannels);
     }
 
     addChannel(guildId, youtubeChannelId, channels) {
@@ -69,7 +79,6 @@ class Config {
         
         if (channels.video) this.config.channels[guildId][youtubeChannelId].video = channels.video;
         if (channels.live) this.config.channels[guildId][youtubeChannelId].live = channels.live;
-        if (channels.upcoming) this.config.channels[guildId][youtubeChannelId].upcoming = channels.upcoming;
         
         this.saveConfig();
     }
@@ -89,11 +98,69 @@ class Config {
 
     setLastChecked(channelId, videoId) {
         this.config.lastChecked[channelId] = videoId;
+        console.log(`[${new Date().toLocaleTimeString()}] Aktualizacja ostatnio sprawdzonego filmu dla ${channelId}: ${videoId}`);
         this.saveConfig();
     }
 
     getChannelConfig(guildId, youtubeChannelId) {
         return this.config.channels[guildId]?.[youtubeChannelId] || null;
+    }
+
+    setTemplate(guildId, type, template) {
+        if (!this.config.serverTemplates) {
+            this.config.serverTemplates = {};
+        }
+        if (!this.config.serverTemplates[guildId]) {
+            this.config.serverTemplates[guildId] = {};
+        }
+        this.config.serverTemplates[guildId][type] = template;
+        this.saveConfig();
+    }
+
+    getCheckInterval(guildId) {
+        if (!this.config.checkIntervals) {
+            this.config.checkIntervals = {};
+        }
+        return this.config.checkIntervals[guildId] || 5; // Default: 5 minutes
+    }
+
+    setCheckInterval(guildId, minutes) {
+        if (!this.config.checkIntervals) {
+            this.config.checkIntervals = {};
+        }
+        this.config.checkIntervals[guildId] = minutes;
+        this.saveConfig();
+    }
+
+    addNotifiedVideo(videoId) {
+        if (!this.config.notifiedVideos) {
+            this.config.notifiedVideos = {};
+        }
+        this.config.notifiedVideos[videoId] = Date.now();
+        this.saveConfig();
+    }
+
+    isVideoNotified(videoId) {
+        return this.config.notifiedVideos && videoId in this.config.notifiedVideos;
+    }
+
+    cleanupNotifiedVideos() {
+        if (!this.config.notifiedVideos) return;
+
+        const oneHourAgo = Date.now() - (60 * 60 * 1000); // 1 hour ago
+        let cleaned = false;
+
+        Object.entries(this.config.notifiedVideos).forEach(([videoId, timestamp]) => {
+            if (timestamp < oneHourAgo) {
+                delete this.config.notifiedVideos[videoId];
+                cleaned = true;
+            }
+        });
+
+        if (cleaned) {
+            console.log(`[${new Date().toLocaleTimeString()}] Wyczyszczono stare filmy z listy powiadomień`);
+            this.saveConfig();
+        }
     }
 }
 

@@ -21,12 +21,6 @@ module.exports = {
             description: 'Kanał Discord dla transmisji na żywo',
             type: 7,
             required: false
-        },
-        {
-            name: 'zaplanowane',
-            description: 'Kanał Discord dla zaplanowanych transmisji',
-            type: 7,
-            required: false
         }
     ],
     async execute(interaction) {
@@ -34,9 +28,8 @@ module.exports = {
             const youtubeChannel = interaction.options.getString('kanal');
             const videoChannel = interaction.options.getChannel('filmy');
             const liveChannel = interaction.options.getChannel('live');
-            const upcomingChannel = interaction.options.getChannel('zaplanowane');
 
-            if (!videoChannel && !liveChannel && !upcomingChannel) {
+            if (!videoChannel && !liveChannel) {
                 return interaction.reply({ 
                     content: '❌ Musisz podać przynajmniej jeden kanał Discord!', 
                     ephemeral: true 
@@ -44,7 +37,7 @@ module.exports = {
             }
 
             // Validate channel types
-            for (const channel of [videoChannel, liveChannel, upcomingChannel]) {
+            for (const channel of [videoChannel, liveChannel]) {
                 if (channel && !channel.isTextBased()) {
                     return interaction.reply({ 
                         content: '❌ Wszystkie kanały muszą być kanałami tekstowymi!', 
@@ -66,14 +59,12 @@ module.exports = {
 
             config.addChannel(interaction.guildId, channelId, {
                 video: videoChannel?.id,
-                live: liveChannel?.id,
-                upcoming: upcomingChannel?.id
+                live: liveChannel?.id
             });
 
             const response = ['✅ Dodano kanał YouTube do listy śledzonych!'];
             if (videoChannel) response.push(`📹 Filmy: ${videoChannel}`);
             if (liveChannel) response.push(`🔴 Transmisje na żywo: ${liveChannel}`);
-            if (upcomingChannel) response.push(`⏰ Zaplanowane transmisje: ${upcomingChannel}`);
             
             await interaction.reply(response.join('\n'));
         } catch (error) {
