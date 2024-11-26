@@ -61,6 +61,8 @@ client.on('interactionCreate', async interaction => {
 
 // Handle updates from YouTubeNotifier
 youtubeNotifier.on('update', async ({ update, channelId, guildId, discordChannelId }) => {
+    logger.info(`Otrzymano wydarzenie aktualizacji dla kanału ${channelId}`);
+    
     const channel = client.channels.cache.get(discordChannelId);
     if (!channel) {
         logger.error(`Nie znaleziono kanału Discord ${discordChannelId}`);
@@ -69,6 +71,8 @@ youtubeNotifier.on('update', async ({ update, channelId, guildId, discordChannel
 
     try {
         const template = config.getTemplate(guildId, update.type);
+        logger.debug(`Używam szablonu dla typu ${update.type}: ${template}`);
+        
         let message = template
             .replace('{nazwaKanalu}', update.channelTitle)
             .replace('{tytul}', update.title)
@@ -96,12 +100,13 @@ youtubeNotifier.on('update', async ({ update, channelId, guildId, discordChannel
             timestamp: new Date(update.publishedAt)
         };
 
+        logger.debug(`Wysyłanie wiadomości na kanał ${discordChannelId}: ${message}`);
         await channel.send({
             content: message,
             embeds: [embed]
         });
 
-        logger.info(`Wysłano powiadomienie ${update.type}: ${update.title}`);
+        logger.info(`Pomyślnie wysłano powiadomienie o ${update.type} do kanału ${discordChannelId}`);
     } catch (error) {
         logger.error(`Błąd podczas wysyłania powiadomienia: ${error}`);
     }

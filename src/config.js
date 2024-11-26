@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const logger = require('./utils/logger');
 
 class Config {
     constructor(configPath = 'config.json') {
@@ -29,7 +28,7 @@ class Config {
             }
             return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
         } catch (error) {
-            logger.error('Błąd podczas ładowania konfiguracji:', error);
+            console.error('Błąd podczas ładowania konfiguracji:', error);
             return { channels: {}, templates: {}, lastChecked: {} };
         }
     }
@@ -37,8 +36,9 @@ class Config {
     saveConfig() {
         try {
             fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
+            console.log(`[${new Date().toLocaleTimeString()}] Zapisano zmiany w konfiguracji`);
         } catch (error) {
-            logger.error('Błąd podczas zapisywania konfiguracji:', error);
+            console.error('Błąd podczas zapisywania konfiguracji:', error);
         }
     }
 
@@ -98,7 +98,7 @@ class Config {
 
     setLastChecked(channelId, videoId) {
         this.config.lastChecked[channelId] = videoId;
-        logger.info(`Aktualizacja ostatnio sprawdzonego filmu dla ${channelId}: ${videoId}`);
+        console.log(`[${new Date().toLocaleTimeString()}] Aktualizacja ostatnio sprawdzonego filmu dla ${channelId}: ${videoId}`);
         this.saveConfig();
     }
 
@@ -147,7 +147,7 @@ class Config {
     cleanupNotifiedVideos() {
         if (!this.config.notifiedVideos) return;
 
-        const fortyMinutesAgo = Date.now() - (40 * 60 * 1000);
+        const fortyMinutesAgo = Date.now() - (40 * 60 * 1000); // 40 minutes ago
         let cleaned = false;
         const initialCount = Object.keys(this.config.notifiedVideos).length;
 
@@ -160,11 +160,8 @@ class Config {
 
         if (cleaned) {
             const finalCount = Object.keys(this.config.notifiedVideos).length;
-            const removedCount = initialCount - finalCount;
-            if (removedCount > 0) {
-                logger.info(`Wyczyszczono ${removedCount} starych powiadomień`);
-                this.saveConfig();
-            }
+            console.log(`Wyczyszczono ${initialCount - finalCount} starych powiadomień`);
+            this.saveConfig();
         }
     }
 }
