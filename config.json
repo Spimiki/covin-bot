@@ -2,26 +2,35 @@
   "channels": {
     "1190369031140679680": {
       "UC5rybJB2vq2bGRl2mt71ebQ": {
-        "video": "1190369031589474447",
-        "live": "1190369251639443537"
+        "id": "UC5rybJB2vq2bGRl2mt71ebQ",
+        "notificationChannels": {
+          "videos": "1190369031589474447",
+          "live": "1190369251639443537",
+          "scheduled": "1190369031589474447"
+        }
+      },
+      "UCWVe6bblNPirVZfinickU_A": {
+        "id": "UCWVe6bblNPirVZfinickU_A",
+        "notificationChannels": {
+          "videos": "1190369031589474447",
+          "live": "1190369251639443537",
+          "scheduled": "1190369031589474447"
+        }
       }
     }
   },
   "serverTemplates": {},
   "templates": {
     "video": "🎥 Nowy film od {nazwaKanalu}!\n📺 {tytul}\n🔗 {link}",
-    "live": "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}"
+    "live": "🔴 {nazwaKanalu} rozpoczął transmisję na żywo!\n📺 {tytul}\n🔗 {link}",
+    "scheduled": "📅 {nazwaKanalu} zaplanował transmisję!\n📺 {tytul}\n🕒 Start: {startTime}\n🔗 {link}"
   },
   "checkIntervals": {
+    "default": 1,
     "1190369031140679680": 1
   },
-  "lastChecked": {
-    "UC04yTyvAHu2GlkYEN78ZT1A": "p0E-7kfvGBQ",
-    "UC5rybJB2vq2bGRl2mt71ebQ": "ce6UXFw68bY"
-  },
   "notifiedVideos": {
-    "GcxFAyojfww": 1732631040982,
-    "05k94dtcWu4": 1732631103828,
-    "hY_ZDz5A2vA": 1732631220552
+    "BuNic8fvWgI": 1732648457266,
+    "o7z9YsyiLAg": 1732648457267
   }
 }

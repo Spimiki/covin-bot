@@ -2,6 +2,7 @@ const RssParser = require('rss-parser');
 const fetch = require('node-fetch');
 const cron = require('node-cron');
 const EventEmitter = require('events');
+const logger = require('./utils/logger');
 
 class YouTubeNotifier extends EventEmitter {
     constructor(config, apiKeys) {
@@ -29,35 +30,54 @@ class YouTubeNotifier extends EventEmitter {
         // Cancel existing cron job for this guild if it exists
         if (this.cronJobs.has(guildId)) {
             this.cronJobs.get(guildId).stop();
+            this.cronJobs.delete(guildId);
+        }
+
+        const guildChannels = this.config.getChannels(guildId);
+        
+        // Check if there are any channels configured for this guild
+        if (!guildChannels || Object.keys(guildChannels).length === 0) {
+            logger.info(`Pomijanie ustawienia harmonogramu dla serwera ${guildId} - brak skonfigurowanych kanałów`);
+            return;
         }
 
         const interval = this.config.getCheckInterval(guildId);
         const cronExpression = `*/${interval} * * * *`; // Run every X minutes
 
-        console.log(`[${new Date().toLocaleTimeString()}] Ustawianie harmonogramu dla serwera ${guildId} z interwałem ${interval} minut`);
+        logger.info(`Ustawianie harmonogramu dla serwera ${guildId} z interwałem ${interval} minut`);
         
         const job = cron.schedule(cronExpression, async () => {
-            console.log(`[${new Date().toLocaleTimeString()}] Uruchamianie zaplanowanego sprawdzenia dla serwera ${guildId}`);
+            logger.info(`Uruchamianie zaplanowanego sprawdzenia dla serwera ${guildId}`);
             const guildChannels = this.config.getChannels(guildId);
             
             for (const channelId of Object.keys(guildChannels)) {
                 try {
                     const updates = await this.checkChannel(channelId);
                     if (Array.isArray(updates) && updates.length > 0) {
+                        // Get all guilds that have this channel configured
+                        const allGuildChannels = this.config.config.channels;
+                        
+                        // Process updates for each guild that has this channel
                         for (const update of updates) {
-                            await this.processUpdate(update, channelId, guildId);
+                            for (const [targetGuildId, targetGuildConfig] of Object.entries(allGuildChannels)) {
+                                if (targetGuildConfig[channelId]) {
+                                    logger.info(`Przetwarzanie aktualizacji dla serwera ${targetGuildId} (kanał: ${channelId})`);
+                                    await this.processUpdate(update, channelId, targetGuildId);
+                                }
+                            }
                         }
                     }
                     // Add small delay between channel checks
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 } catch (error) {
-                    console.error(`[${new Date().toLocaleTimeString()}] Błąd podczas sprawdzania kanału ${channelId} dla serwera ${guildId}:`, error);
+                    logger.error(`Błąd podczas sprawdzania kanału ${channelId} dla serwera ${guildId}:`, error);
                 }
             }
         });
 
         // Add hourly cleanup of notified videos
         cron.schedule('0 * * * *', () => {
+            logger.info('Rozpoczęcie czyszczenia starych powiadomień...');
             this.config.cleanupNotifiedVideos();
         });
 
@@ -67,15 +87,26 @@ class YouTubeNotifier extends EventEmitter {
     async processUpdate(update, channelId, guildId) {
         const guildChannels = this.config.getChannels(guildId);
         const channelConfig = guildChannels[channelId];
+        
         if (!channelConfig) return;
 
-        const discordChannelId = channelConfig[update.type];
+        const typeMapping = {
+            'video': 'videos',
+            'live': 'live',
+            'scheduled': 'scheduled'
+        };
+
+        const notificationType = typeMapping[update.type];
+        const discordChannelId = channelConfig.notificationChannels?.[notificationType];
+        
         if (!discordChannelId) {
-            console.log(`[${new Date().toLocaleTimeString()}] Brak skonfigurowanego kanału dla typu ${update.type} na serwerze ${guildId}`);
+            logger.error(`Brak kanału dla typu ${update.type} na serwerze ${guildId}`);
             return;
         }
 
-        // Emit an event for the main application to handle the update
+        logger.info(`Wysyłanie ${update.type}: "${update.title}" na kanał ${discordChannelId}`);
+        
+        this.statistics.notifications++;
         this.emit('update', {
             update,
             channelId,
@@ -188,94 +219,83 @@ class YouTubeNotifier extends EventEmitter {
         try {
             const apiKey = this.getNextValidKey();
             const uploadsPlaylistId = channelId.startsWith('UC') ? 'UU' + channelId.slice(2) : channelId;
-            const lastVideoId = this.config.getLastChecked(channelId);
-            const updates = [];
-
-            console.log(`[${new Date().toLocaleTimeString()}] Wysyłanie zapytań API dla kanału ${channelId}`);
             
-            const [videoResponse, liveResponse] = await Promise.all([
-                fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${uploadsPlaylistId}&part=snippet&maxResults=5&order=date`),
-                fetch(`https://www.googleapis.com/youtube/v3/search?key=${apiKey}&channelId=${channelId}&part=snippet&eventType=live&type=video&maxResults=1`)
-            ]);
+            const response = await fetch(
+                `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${uploadsPlaylistId}&part=snippet,status&maxResults=10&order=date`
+            );
 
-            console.log(`[${new Date().toLocaleTimeString()}] Status odpowiedzi API - Filmy: ${videoResponse.status}, Transmisje: ${liveResponse.status}`);
-
-            if (!videoResponse.ok || !liveResponse.ok) {
-                const videoError = await videoResponse.text().catch(() => 'Brak szczegółów błędu');
-                const liveError = await liveResponse.text().catch(() => 'Brak szczegółów błędu');
-                throw new Error(`Błąd API - Filmy: ${videoError}, Transmisje: ${liveError}`);
-            }
-
-            const [videoData, liveData] = await Promise.all([
-                videoResponse.json(),
-                liveResponse.json()
-            ]);
-
-            // Log quota usage if available in response headers
-            const quotaUsage = videoResponse.headers.get('x-quota-usage');
-            if (quotaUsage) {
-                console.log(`[${new Date().toLocaleTimeString()}] Użycie limitu API: ${quotaUsage}`);
-            }
-
-            // Log live stream check results
-            if (liveData.items?.length > 0) {
-                console.log(`[${new Date().toLocaleTimeString()}] Znaleziono ${liveData.items.length} transmisje dla ${channelId}`);
-            }
-
-            // Check livestreams first
-            if (liveData.items?.[0]) {
-                const liveItem = liveData.items[0];
-                if (liveItem.snippet.liveBroadcastContent === 'live' && 
-                    lastVideoId !== liveItem.id.videoId) {
-                    
-                    console.log(`[${new Date().toLocaleTimeString()}] Znaleziono nową transmisję: ${liveItem.snippet.title}`);
-                    updates.push(this.createUpdateObject(liveItem, 'live'));
+            if (!response.ok) {
+                if (response.status === 404) {
+                    logger.error(`Playlista uploads niedostępna dla kanału ${channelId}`);
+                    return { videos: { items: [] }, streams: { items: [] }, scheduled: { items: [] } };
                 }
+                throw new Error(`Błąd API: ${response.status}`);
             }
 
-            // Log video check results
-            if (videoData.items?.length > 0) {
-                console.log(`[${new Date().toLocaleTimeString()}] Znaleziono ${videoData.items.length} filmów dla ${channelId}`);
-                
-                // Process videos
-                for (const item of videoData.items) {
-                    const videoId = item.snippet?.resourceId?.videoId;
-                    if (videoId && videoId !== lastVideoId && !this.config.isVideoNotified(videoId)) {
-                        // Check if video is less than an hour old
-                        const publishTime = new Date(item.snippet.publishedAt);
-                        const videoAge = Date.now() - publishTime.getTime();
-                        const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+            const data = await response.json();
+            const items = data.items || [];
 
-                        if (videoAge > oneHour) {
-                            console.log(`[${new Date().toLocaleTimeString()}] Pomijanie starego filmu (${Math.floor(videoAge / oneHour)}h): ${item.snippet.title}`);
-                            this.config.setLastChecked(channelId, videoId);
-                            continue;
+            // Get additional details for potential livestreams
+            const potentialStreams = items.filter(item => 
+                item.snippet.title?.toLowerCase().includes('nadaje na żywo') || 
+                item.snippet.title?.toLowerCase().includes('live') ||
+                item.snippet.thumbnails?.high?.url?.includes('_live.jpg') ||
+                item.snippet.liveBroadcastContent === 'live' ||
+                item.snippet.liveBroadcastContent === 'upcoming'
+            );
+
+            // Fetch additional details for potential streams
+            for (const item of potentialStreams) {
+                try {
+                    const videoResponse = await fetch(
+                        `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${item.snippet.resourceId.videoId}&part=liveStreamingDetails,snippet`
+                    );
+                    if (videoResponse.ok) {
+                        const videoData = await videoResponse.json();
+                        if (videoData.items?.[0]) {
+                            const details = videoData.items[0];
+                            item.snippet.scheduledStartTime = details.liveStreamingDetails?.scheduledStartTime;
+                            item.snippet.actualStartTime = details.liveStreamingDetails?.actualStartTime;
                         }
-
-                        console.log(`[${new Date().toLocaleTimeString()}] Znaleziono nowy film: ${item.snippet.title}`);
-                        updates.push({
-                            type: 'video',
-                            title: item.snippet.title,
-                            url: `https://www.youtube.com/watch?v=${videoId}`,
-                            thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
-                            channelTitle: item.snippet.channelTitle,
-                            publishedAt: item.snippet.publishedAt
-                        });
-                        this.config.addNotifiedVideo(videoId);
-                        this.config.setLastChecked(channelId, videoId);
-                        break; // Only process the most recent video
+                        this.updateQuotaUsage(apiKey, 2);
                     }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (error) {
+                    logger.error(`Błąd szczegółów transmisji ${item.snippet.resourceId.videoId}: ${error}`);
                 }
             }
 
-            // Update quota usage (each request costs different amounts)
-            // playlistItems.list = 1 unit
-            // search.list = 100 units
-            this.updateQuotaUsage(apiKey, 101);
+            // Filtering logic
+            const videos = items.filter(item => {
+                const isLiveOrScheduled = 
+                    item.snippet.liveBroadcastContent === 'live' ||
+                    item.snippet.liveBroadcastContent === 'upcoming' ||
+                    item.snippet.scheduledStartTime ||
+                    item.snippet.actualStartTime;
+                return !isLiveOrScheduled;
+            });
 
-            return updates.length > 0 ? updates : null;
+            const streams = items.filter(item => 
+                item.snippet.liveBroadcastContent === 'live' ||
+                item.snippet.actualStartTime
+            );
+
+            const scheduled = items.filter(item => 
+                (item.snippet.liveBroadcastContent === 'upcoming' || item.snippet.scheduledStartTime) &&
+                !item.snippet.actualStartTime
+            );
+
+            if (videos.length > 0 || streams.length > 0 || scheduled.length > 0) {
+                logger.info(`Kanał ${channelId}: ${videos.length} filmów, ${streams.length} transmisji, ${scheduled.length} zaplanowanych`);
+            }
+
+            return {
+                videos: { items: videos },
+                streams: { items: streams },
+                scheduled: { items: scheduled }
+            };
         } catch (error) {
-            console.error(`[${new Date().toLocaleTimeString()}] Błąd podczas sprawdzania API dla ${channelId}:`, error);
+            logger.error(`Błąd API dla ${channelId}: ${error}`);
             throw error;
         }
     }
@@ -284,31 +304,67 @@ class YouTubeNotifier extends EventEmitter {
         const now = Date.now();
         const lastCheck = this.lastCheckTime[channelId] || 0;
         
-        if (now - lastCheck < 45000) { // 45 seconds cooldown
-            console.log(`[${new Date().toLocaleTimeString()}] Pomijanie kanału ${channelId} - za wcześnie na kolejne sprawdzenie`);
+        if (now - lastCheck < 45000) {
+            logger.debug(`Pomijanie kanału ${channelId} - za wcześnie na kolejne sprawdzenie (ostatnie: ${new Date(lastCheck).toLocaleTimeString()})`);
             return null;
         }
         
         this.lastCheckTime[channelId] = now;
+        logger.info(`Rozpoczęcie sprawdzania kanału ${channelId}`);
 
         try {
-            // Always try API first
-            const apiResult = await this.checkWithAPI(channelId);
-            if (apiResult) return apiResult;
+            const response = await this.checkWithAPI(channelId);
+            const updates = [];
 
-            // Only use RSS if all API keys are exceeded
-            const allKeysExceeded = Array.from(this.keyStatus.values()).every(status => status.exceeded);
-            if (allKeysExceeded) {
-                console.log(`[${new Date().toLocaleTimeString()}] Wszystkie klucze API wyczerpane, używam RSS dla ${channelId}`);
-                return this.checkWithRSS(channelId);
+            // Process regular videos
+            for (const video of response.videos.items) {
+                const videoId = video.snippet?.resourceId?.videoId;
+                if (videoId && !this.config.isVideoNotified(videoId)) {
+                    const publishTime = new Date(video.snippet.publishedAt);
+                    const videoAge = Date.now() - publishTime.getTime();
+                    const oneHour = 60 * 60 * 1000;
+
+                    if (videoAge > oneHour) {
+                        logger.debug(`Pomijanie starego filmu (${Math.floor(videoAge / oneHour)}h): ${video.snippet.title}`);
+                        continue;
+                    }
+
+                    logger.info(`Wykryto nowy film: "${video.snippet.title}" (ID: ${videoId})`);
+                    updates.push(this.createUpdateObject(video, 'video'));
+                    this.config.addNotifiedVideo(videoId);
+                }
             }
 
-            return null;
+            // Process live streams
+            for (const stream of response.streams.items) {
+                const videoId = stream.snippet?.resourceId?.videoId;
+                if (videoId && !this.config.isVideoNotified(videoId)) {
+                    console.log(`[${new Date().toLocaleTimeString()}] Znaleziono nową transmisję: ${stream.snippet.title}`);
+                    updates.push(this.createUpdateObject(stream, 'live'));
+                    this.config.addNotifiedVideo(videoId);
+                }
+            }
+
+            // Process scheduled streams
+            for (const scheduled of response.scheduled.items) {
+                const videoId = scheduled.snippet?.resourceId?.videoId;
+                if (videoId && !this.config.isVideoNotified(videoId)) {
+                    console.log(`[${new Date().toLocaleTimeString()}] Znaleziono zaplanowaną transmisję: ${scheduled.snippet.title}`);
+                    updates.push(this.createUpdateObject(scheduled, 'scheduled'));
+                    this.config.addNotifiedVideo(videoId);
+                }
+            }
+
+            if (updates.length > 0) {
+                logger.info(`Znaleziono ${updates.length} nowych aktualizacji dla kanału ${channelId}`);
+                logger.debug(`Szczegóły aktualizacji: ${updates.map(u => `${u.type}: ${u.title}`).join(', ')}`);
+            } else {
+                logger.debug(`Brak nowych aktualizacji dla kanału ${channelId}`);
+            }
+
+            return updates.length > 0 ? updates : null;
         } catch (error) {
-            if (error.message === 'Przekroczono limit zapytań API') {
-                console.log(`[${new Date().toLocaleTimeString()}] Limit API przekroczony, używam RSS dla ${channelId}`);
-                return this.checkWithRSS(channelId);
-            }
+            logger.error(`Błąd podczas sprawdzania kanału ${channelId}: ${error}`);
             throw error;
         }
     }
@@ -359,42 +415,108 @@ class YouTubeNotifier extends EventEmitter {
     }
 
     createUpdateObject(item, type) {
+        logger.info(`Tworzenie obiektu aktualizacji dla filmu: ${item.snippet.title}`);
         return {
             type: type,
             title: item.snippet.title,
-            url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-            thumbnail: item.snippet.thumbnails.high.url,
+            url: `https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}`,
+            thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
             channelTitle: item.snippet.channelTitle,
             publishedAt: item.snippet.publishedAt,
             scheduledStartTime: item.snippet.scheduledStartTime || null
         };
     }
 
-    cleanupNotifiedVideos() {
-        this.notifiedVideos.clear();
-        console.log(`[${new Date().toLocaleTimeString()}] Wyczyszczono listę powiadomionych filmów`);
-    }
-
     async performInitialCheck() {
-        console.log(`[${new Date().toLocaleTimeString()}] Wykonywanie początkowego sprawdzenia kanałów...`);
+        logger.info('Wykonywanie początkowego sprawdzenia kanałów...');
         try {
             const allChannels = new Set();
             const guildChannels = this.config.config.channels;
             
-            // Collect unique channel IDs from all guilds
+            // First, collect all unique YouTube channel IDs
             Object.values(guildChannels).forEach(channels => {
                 Object.keys(channels).forEach(channelId => {
                     allChannels.add(channelId);
                 });
             });
 
+            // Then check each YouTube channel
             for (const channelId of allChannels) {
-                await this.checkChannel(channelId);
+                const updates = await this.checkChannel(channelId);
+                if (Array.isArray(updates) && updates.length > 0) {
+                    for (const update of updates) {
+                        // Track which Discord channels we've sent to for this update
+                        const notifiedDiscordChannels = new Set();
+                        
+                        for (const [guildId, guildConfig] of Object.entries(guildChannels)) {
+                            if (guildConfig[channelId]) {
+                                const discordChannelId = guildConfig[channelId].notificationChannels?.[
+                                    update.type === 'video' ? 'videos' : update.type
+                                ];
+                                
+                                // Skip if we've already sent to this Discord channel
+                                if (discordChannelId && !notifiedDiscordChannels.has(discordChannelId)) {
+                                    await this.processUpdate(update, channelId, guildId);
+                                    notifiedDiscordChannels.add(discordChannelId);
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            console.log(`[${new Date().toLocaleTimeString()}] Początkowe sprawdzenie zakończone`);
+            logger.info('Początkowe sprawdzenie zakończone');
         } catch (error) {
-            console.error(`[${new Date().toLocaleTimeString()}] Błąd podczas początkowego sprawdzenia:`, error);
+            logger.error(`Błąd podczas początkowego sprawdzenia: ${error}`);
         }
+    }
+
+    async checkServer(serverId) {
+        const serverConfig = this.config.getChannels(serverId);
+        
+        if (!serverConfig || Object.keys(serverConfig).length === 0) {
+            logger.info(`Pomijanie sprawdzenia dla serwera ${serverId} - brak skonfigurowanych kanałów`);
+            return;
+        }
+
+        logger.info(`Uruchamianie zaplanowanego sprawdzenia dla serwera ${serverId}`);
+        
+        for (const channelId of Object.keys(serverConfig)) {
+            try {
+                const updates = await this.checkChannel(channelId);
+                if (Array.isArray(updates) && updates.length > 0) {
+                    // Get all guilds that have this channel configured
+                    const allGuildChannels = this.config.config.channels;
+                    
+                    // Process updates for each guild that has this channel
+                    for (const update of updates) {
+                        // Track which Discord channels we've sent to for this update
+                        const notifiedDiscordChannels = new Set();
+                        
+                        for (const [guildId, guildConfig] of Object.entries(allGuildChannels)) {
+                            if (guildConfig[channelId]) {
+                                const discordChannelId = guildConfig[channelId].notificationChannels?.[
+                                    update.type === 'video' ? 'videos' : update.type
+                                ];
+                                
+                                // Skip if we've already sent to this Discord channel
+                                if (discordChannelId && !notifiedDiscordChannels.has(discordChannelId)) {
+                                    logger.info(`Przetwarzanie aktualizacji dla serwera ${guildId} (kanał: ${channelId})`);
+                                    await this.processUpdate(update, channelId, guildId);
+                                    notifiedDiscordChannels.add(discordChannelId);
+                                }
+                            }
+                        }
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            } catch (error) {
+                logger.error(`Błąd podczas sprawdzania kanału ${channelId} dla serwera ${serverId}:`, error);
+            }
+        }
+    }
+
+    getCheckInterval(serverId) {
+        return this.config.checkIntervals[serverId] || this.config.checkIntervals.default || 1;
     }
 }
 

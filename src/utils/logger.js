@@ -24,8 +24,10 @@ class Logger {
         const timestamp = new Date().toISOString();
         const logMessage = `[${timestamp}] [${level}] ${message}\n`;
         
-        // Write to console
-        console.log(logMessage.trim());
+        // Write to console only if it's not DEBUG level
+        if (level !== 'DEBUG') {
+            console.log(logMessage.trim());
+        }
         
         // Write to file
         fs.appendFileSync(this.currentLogFile, logMessage);

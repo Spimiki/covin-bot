@@ -74,10 +74,15 @@ youtubeNotifier.on('update', async ({ update, channelId, guildId, discordChannel
             .replace('{tytul}', update.title)
             .replace('{link}', update.url);
 
+        if (update.type === 'scheduled' && update.scheduledStartTime) {
+            message = message.replace('{startTime}', new Date(update.scheduledStartTime).toLocaleString('pl-PL'));
+        }
+
         const embed = {
             color: {
                 'live': 0xFF0000,
-                'video': 0x0099ff
+                'video': 0x0099ff,
+                'scheduled': 0xFFA500
             }[update.type],
             author: {
                 name: update.channelTitle,
@@ -96,7 +101,7 @@ youtubeNotifier.on('update', async ({ update, channelId, guildId, discordChannel
             embeds: [embed]
         });
 
-        logger.info(`Wysłano powiadomienie o ${update.type} do kanału ${discordChannelId}`);
+        logger.info(`Wysłano powiadomienie ${update.type}: ${update.title}`);
     } catch (error) {
         logger.error(`Błąd podczas wysyłania powiadomienia: ${error}`);
     }

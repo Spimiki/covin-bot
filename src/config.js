@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('./utils/logger');
 
 class Config {
     constructor(configPath = 'config.json') {
@@ -28,7 +29,7 @@ class Config {
             }
             return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
         } catch (error) {
-            console.error('Błąd podczas ładowania konfiguracji:', error);
+            logger.error('Błąd podczas ładowania konfiguracji:', error);
             return { channels: {}, templates: {}, lastChecked: {} };
         }
     }
@@ -36,9 +37,8 @@ class Config {
     saveConfig() {
         try {
             fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
-            console.log(`[${new Date().toLocaleTimeString()}] Zapisano zmiany w konfiguracji`);
         } catch (error) {
-            console.error('Błąd podczas zapisywania konfiguracji:', error);
+            logger.error('Błąd podczas zapisywania konfiguracji:', error);
         }
     }
 
@@ -98,7 +98,7 @@ class Config {
 
     setLastChecked(channelId, videoId) {
         this.config.lastChecked[channelId] = videoId;
-        console.log(`[${new Date().toLocaleTimeString()}] Aktualizacja ostatnio sprawdzonego filmu dla ${channelId}: ${videoId}`);
+        logger.info(`Aktualizacja ostatnio sprawdzonego filmu dla ${channelId}: ${videoId}`);
         this.saveConfig();
     }
 
@@ -147,19 +147,24 @@ class Config {
     cleanupNotifiedVideos() {
         if (!this.config.notifiedVideos) return;
 
-        const oneHourAgo = Date.now() - (60 * 60 * 1000); // 1 hour ago
+        const fortyMinutesAgo = Date.now() - (40 * 60 * 1000);
         let cleaned = false;
+        const initialCount = Object.keys(this.config.notifiedVideos).length;
 
         Object.entries(this.config.notifiedVideos).forEach(([videoId, timestamp]) => {
-            if (timestamp < oneHourAgo) {
+            if (timestamp < fortyMinutesAgo) {
                 delete this.config.notifiedVideos[videoId];
                 cleaned = true;
             }
         });
 
         if (cleaned) {
-            console.log(`[${new Date().toLocaleTimeString()}] Wyczyszczono stare filmy z listy powiadomień`);
-            this.saveConfig();
+            const finalCount = Object.keys(this.config.notifiedVideos).length;
+            const removedCount = initialCount - finalCount;
+            if (removedCount > 0) {
+                logger.info(`Wyczyszczono ${removedCount} starych powiadomień`);
+                this.saveConfig();
+            }
         }
     }
 }

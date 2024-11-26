@@ -21,14 +21,19 @@ module.exports = {
             for (const [youtubeId, channelConfig] of Object.entries(channels)) {
                 let channelInfo = [];
                 
-                if (channelConfig.video) {
-                    const videoChannel = interaction.client.channels.cache.get(channelConfig.video);
-                    channelInfo.push(`📹 Filmy: ${videoChannel ? `<#${channelConfig.video}>` : 'Kanał niedostępny'}`);
+                if (channelConfig.notificationChannels?.videos) {
+                    const videoChannel = interaction.client.channels.cache.get(channelConfig.notificationChannels.videos);
+                    channelInfo.push(`📹 Filmy: ${videoChannel ? `<#${channelConfig.notificationChannels.videos}>` : 'Kanał niedostępny'}`);
                 }
                 
-                if (channelConfig.live) {
-                    const liveChannel = interaction.client.channels.cache.get(channelConfig.live);
-                    channelInfo.push(`🔴 Transmisje: ${liveChannel ? `<#${channelConfig.live}>` : 'Kanał niedostępny'}`);
+                if (channelConfig.notificationChannels?.live) {
+                    const liveChannel = interaction.client.channels.cache.get(channelConfig.notificationChannels.live);
+                    channelInfo.push(`🔴 Transmisje: ${liveChannel ? `<#${channelConfig.notificationChannels.live}>` : 'Kanał niedostępny'}`);
+                }
+
+                if (channelConfig.notificationChannels?.scheduled) {
+                    const scheduledChannel = interaction.client.channels.cache.get(channelConfig.notificationChannels.scheduled);
+                    channelInfo.push(`📅 Zaplanowane: ${scheduledChannel ? `<#${channelConfig.notificationChannels.scheduled}>` : 'Kanał niedostępny'}`);
                 }
 
                 embed.fields.push({

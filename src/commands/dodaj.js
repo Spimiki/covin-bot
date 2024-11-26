@@ -1,35 +1,49 @@
 const { config } = require('../instances');
-const youtubeNotifier = require('../YouTubeNotifier');
+
 module.exports = {
     name: 'dodaj',
     description: 'Dodaje kanał YouTube do listy śledzonych',
     options: [
         {
             name: 'kanal',
-            description: 'ID lub link do kanału YouTube',
-            type: 3,
+            description: 'ID kanału YouTube do śledzenia',
+            type: 3, // STRING
             required: true
         },
         {
             name: 'filmy',
-            description: 'Kanał Discord dla filmów',
-            type: 7,
+            description: 'Kanał do powiadomień o nowych filmach',
+            type: 7, // CHANNEL
             required: false
         },
         {
-            name: 'live',
-            description: 'Kanał Discord dla transmisji na żywo',
-            type: 7,
+            name: 'transmisje',
+            description: 'Kanał do powiadomień o transmisjach na żywo',
+            type: 7, // CHANNEL
+            required: false
+        },
+        {
+            name: 'zaplanowane',
+            description: 'Kanał do powiadomień o zaplanowanych transmisjach',
+            type: 7, // CHANNEL
             required: false
         }
     ],
     async execute(interaction) {
+        const guildId = interaction.guildId;
+        
+        // Initialize the guild's configuration if it doesn't exist
+        if (!config.config.channels[guildId]) {
+            config.config.channels[guildId] = {};
+        }
+
         try {
             const youtubeChannel = interaction.options.getString('kanal');
             const videoChannel = interaction.options.getChannel('filmy');
-            const liveChannel = interaction.options.getChannel('live');
+            const liveChannel = interaction.options.getChannel('transmisje');
+            const scheduledChannel = interaction.options.getChannel('zaplanowane');
 
-            if (!videoChannel && !liveChannel) {
+            if (!videoChannel && !liveChannel && !scheduledChannel) {
                 return interaction.reply({ 
                     content: '❌ Musisz podać przynajmniej jeden kanał Discord!', 
                     ephemeral: true 
@@ -37,7 +51,7 @@ module.exports = {
             }
 
             // Validate channel types
-            for (const channel of [videoChannel, liveChannel]) {
+            for (const channel of [videoChannel, liveChannel, scheduledChannel]) {
                 if (channel && !channel.isTextBased()) {
                     return interaction.reply({ 
                         content: '❌ Wszystkie kanały muszą być kanałami tekstowymi!', 
@@ -46,27 +60,27 @@ module.exports = {
                 }
             }
 
-            const channelId = youtubeChannel.match(/youtube\.com\/channel\/(UC[\w-]+)/) 
-                ? youtubeChannel.match(/youtube\.com\/channel\/(UC[\w-]+)/)[1] 
-                : youtubeChannel;
+            // Create channel configuration
+            const channelConfig = {
+                id: youtubeChannel,
+                notificationChannels: {}
+            };
 
-            if (!channelId.startsWith('UC')) {
-                return interaction.reply({ 
-                    content: '❌ Nieprawidłowe ID kanału YouTube! ID musi zaczynać się od "UC"', 
-                    ephemeral: true 
-                });
+            if (videoChannel) {
+                channelConfig.notificationChannels.videos = videoChannel.id;
+            }
+            if (liveChannel) {
+                channelConfig.notificationChannels.live = liveChannel.id;
+            }
+            if (scheduledChannel) {
+                channelConfig.notificationChannels.scheduled = scheduledChannel.id;
             }
 
-            config.addChannel(interaction.guildId, channelId, {
-                video: videoChannel?.id,
-                live: liveChannel?.id
-            });
+            // Add channel to configuration
+            config.config.channels[guildId][youtubeChannel] = channelConfig;
+            config.saveConfig();
 
-            const response = ['✅ Dodano kanał YouTube do listy śledzonych!'];
-            if (videoChannel) response.push(`📹 Filmy: ${videoChannel}`);
-            if (liveChannel) response.push(`🔴 Transmisje na żywo: ${liveChannel}`);
-            
-            await interaction.reply(response.join('\n'));
+            await interaction.reply('✅ Kanał został dodany do listy śledzonych!');
         } catch (error) {
             console.error('Błąd podczas dodawania kanału:', error);
             await interaction.reply({ 
