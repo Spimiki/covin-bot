@@ -41,6 +41,16 @@ class YouTubeNotifier extends EventEmitter {
             return;
         }
 
+        // Only proceed if there are actual YouTube channels configured
+        const hasConfiguredChannels = Object.values(guildChannels).some(channel => 
+            Object.keys(channel).length > 0
+        );
+
+        if (!hasConfiguredChannels) {
+            logger.info(`Pomijanie ustawienia harmonogramu dla serwera ${guildId} - brak aktywnych kanałów YouTube`);
+            return;
+        }
+
         const interval = this.config.getCheckInterval(guildId);
         const cronExpression = `*/${interval} * * * *`; // Run every X minutes
 
