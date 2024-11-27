@@ -11,7 +11,8 @@ module.exports = {
             required: true,
             choices: [
                 { name: 'Filmy', value: 'video' },
-                { name: 'Transmisje na żywo', value: 'live' }
+                { name: 'Transmisje na żywo', value: 'live' },
+                { name: 'Zaplanowane transmisje', value: 'scheduled' }
             ]
         },
         {
@@ -42,13 +43,15 @@ module.exports = {
                     description: 'Dostępne zmienne:\n' +
                         '`{nazwaKanalu}` - nazwa kanału\n' +
                         '`{tytul}` - tytuł filmu/transmisji\n' +
-                        '`{link}` - link do filmu/transmisji',
+                        '`{link}` - link do filmu/transmisji' +
+                        (type === 'scheduled' ? '\n`{startTime}` - zaplanowany czas rozpoczęcia' : ''),
                     fields: [
                         {
                             name: 'Typ',
                             value: {
                                 video: '📹 Filmy',
-                                live: '🔴 Transmisje na żywo'
+                                live: '🔴 Transmisje na żywo',
+                                scheduled: '📅 Zaplanowane transmisje'
                             }[type],
                             inline: true
                         },
@@ -67,9 +70,12 @@ module.exports = {
             // Validate template
             if (!template.includes('{nazwaKanalu}') || 
                 !template.includes('{tytul}') || 
-                !template.includes('{link}')) {
+                !template.includes('{link}') ||
+                (type === 'scheduled' && !template.includes('{startTime}'))) {
                 return interaction.editReply({
-                    content: '❌ Szablon musi zawierać wszystkie wymagane zmienne: {nazwaKanalu}, {tytul}, {link}',
+                    content: '❌ Szablon musi zawierać wszystkie wymagane zmienne: ' +
+                        '{nazwaKanalu}, {tytul}, {link}' +
+                        (type === 'scheduled' ? ', {startTime}' : ''),
                     ephemeral: true
                 });
             }
