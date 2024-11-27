@@ -80,6 +80,10 @@ module.exports = {
             config.config.channels[guildId][youtubeChannel] = channelConfig;
             config.saveConfig();
 
+            // After saving, set up the cron job for this guild
+            const { youtubeNotifier } = require('../instances');
+            youtubeNotifier.setupCronJob(guildId);
+
             await interaction.reply('✅ Kanał został dodany do listy śledzonych!');
         } catch (error) {
             console.error('Błąd podczas dodawania kanału:', error);
