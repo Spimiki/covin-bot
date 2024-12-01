@@ -122,9 +122,11 @@ class Config {
 
     getCheckInterval(guildId) {
         if (!this.config.checkIntervals) {
-            this.config.checkIntervals = {};
+            this.config.checkIntervals = {
+                default: 1
+            };
         }
-        return this.config.checkIntervals[guildId] || 5; // Default: 5 minutes
+        return this.config.checkIntervals[guildId] || this.config.checkIntervals.default || 1;
     }
 
     setCheckInterval(guildId, minutes) {
