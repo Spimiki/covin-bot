@@ -9,6 +9,9 @@ class Config {
         if (!this.config.notifiedVideos) {
             this.config.notifiedVideos = {};
         }
+        if (!this.config.activeStreams) {
+            this.config.activeStreams = {};
+        }
     }
 
     loadConfig() {
@@ -132,15 +135,24 @@ class Config {
         this.saveConfig();
     }
 
-    addNotifiedVideo(videoId) {
+    addNotifiedVideo(videoId, isLive = false) {
         if (!this.config.notifiedVideos) {
             this.config.notifiedVideos = {};
+        }
+        if (isLive) {
+            if (!this.config.activeStreams) {
+                this.config.activeStreams = {};
+            }
+            this.config.activeStreams[videoId] = Date.now();
         }
         this.config.notifiedVideos[videoId] = Date.now();
         this.saveConfig();
     }
 
-    isVideoNotified(videoId) {
+    isVideoNotified(videoId, isLive = false) {
+        if (isLive) {
+            return this.config.activeStreams && videoId in this.config.activeStreams;
+        }
         return this.config.notifiedVideos && videoId in this.config.notifiedVideos;
     }
 
@@ -148,19 +160,34 @@ class Config {
         if (!this.config.notifiedVideos) return;
 
         const fortyMinutesAgo = Date.now() - (40 * 60 * 1000); // 40 minutes ago
+        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
         let cleaned = false;
         const initialCount = Object.keys(this.config.notifiedVideos).length;
+        const initialStreamCount = Object.keys(this.config.activeStreams || {}).length;
 
+        // Cleanup regular video notifications
         Object.entries(this.config.notifiedVideos).forEach(([videoId, timestamp]) => {
-            if (timestamp < fortyMinutesAgo) {
+            if (timestamp < fortyMinutesAgo && !(videoId in (this.config.activeStreams || {}))) {
                 delete this.config.notifiedVideos[videoId];
                 cleaned = true;
             }
         });
 
+        // Cleanup old stream notifications
+        if (this.config.activeStreams) {
+            Object.entries(this.config.activeStreams).forEach(([videoId, timestamp]) => {
+                if (timestamp < twentyFourHoursAgo) {
+                    delete this.config.activeStreams[videoId];
+                    delete this.config.notifiedVideos[videoId];
+                    cleaned = true;
+                }
+            });
+        }
+
         if (cleaned) {
             const finalCount = Object.keys(this.config.notifiedVideos).length;
-            console.log(`Wyczyszczono ${initialCount - finalCount} starych powiadomień`);
+            const finalStreamCount = Object.keys(this.config.activeStreams || {}).length;
+            console.log(`Wyczyszczono ${initialCount - finalCount} starych powiadomień i ${initialStreamCount - finalStreamCount} starych transmisji`);
             this.saveConfig();
         }
     }

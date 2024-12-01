@@ -348,10 +348,10 @@ class YouTubeNotifier extends EventEmitter {
             // Process live streams
             for (const stream of response.streams.items) {
                 const videoId = stream.snippet?.resourceId?.videoId;
-                if (videoId && !this.config.isVideoNotified(videoId)) {
+                if (videoId && !this.config.isVideoNotified(videoId, true)) {
                     console.log(`[${new Date().toLocaleTimeString()}] Znaleziono nową transmisję: ${stream.snippet.title}`);
                     updates.push(this.createUpdateObject(stream, 'live'));
-                    this.config.addNotifiedVideo(videoId);
+                    this.config.addNotifiedVideo(videoId, true);
                 }
             }
 
