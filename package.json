@@ -4,7 +4,8 @@
   "description": "Discord bot for YouTube notifications in Polish",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "status": "node src/scripts/checkStatus.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
