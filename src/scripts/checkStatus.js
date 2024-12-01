@@ -1,8 +1,8 @@
+// Load environment variables first
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+
 const { config, youtubeNotifier, client } = require('../instances');
 const logger = require('../utils/logger');
-
-// Import and initialize what's needed
-require('dotenv').config();
 
 async function checkStatus() {
     try {
