@@ -1,4 +1,4 @@
-const Config = require('./config.json');
+const Config = require('./config.js');
 const YouTubeNotifier = require('./YouTubeNotifier');
 
 const config = new Config();
